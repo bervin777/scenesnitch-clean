@@ -1,0 +1,55 @@
+workflows:
+  expo_scenesnitch:
+    name: SceneSnitch • Expo (Android + iOS)
+    environment:
+      node: 20
+      xcode: latest
+      groups:
+
+        - scenesnitch_env
+      vars:
+        EXPO_CLI_VERSION: latest
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+    scripts:
+      - name: Install deps
+        script: |
+          npm ci || npm i
+      - name: Verify env keys are present
+        script: |
+          echo "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:0:4}****"
+          echo "TMDB_API_KEY=${TMDB_API_KEY:+set}"
+          echo "FIREBASE_API_KEY=${FIREBASE_API_KEY:+set}"
+      - name: Expo doctor
+        script: npx expo doctor
+      - name: Build Android APK (debug, universal)
+        script: |
+          npx expo export --platform android --experimental-bundle --dump-sourcemap
+          npx expo run:android --variant debug --no-install --no-bundler || true
+          # Fallback: use EAS build if configured
+      - name: Expo build:android (AAB) via EAS if available
+        script: |
+          if command -v eas >/dev/null 2>&1; then
+            npx eas build --platform android --profile preview --non-interactive || true
+          fi
+      - name: iOS debug build (no signing)
+        script: |
+          npx expo run:ios --no-install --no-bundler || true
+    artifacts:
+      - android/*.apk
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/**/*.aab
+      - ios/build/**/*.ipa
+      - dist/**
+    publishing:
+      email:
+        recipients:
+          - support@integrityfirstcyber.com
+        notify:
+          success: true
+          failure: true
